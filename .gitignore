@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+
+# Environment / secrets (API keys live here, never in git)
+.env
+
+# Large datasets — only the small samples in tests/data/ are committed
+data/
+*.log.gz
+tests/data/HDFS.log
+tests/data/HDFS_v1/
+
+# Drain3 runtime state snapshots
+*_state.bin
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
