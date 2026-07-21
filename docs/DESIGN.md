@@ -3,9 +3,44 @@
 | | |
 |---|---|
 | **Author** | Tanishq Patil |
-| **Status** | Draft |
+| **Status** | Active — M1 nearly complete, M2 detection proven |
 | **Created** | 2026-07-15 |
-| **Version** | 0.1 |
+| **Updated** | 2026-07-21 |
+| **Version** | 0.2 |
+
+---
+
+## 0. Current Status (2026-07-21)
+
+The statistical **detection** pipeline is built and its core hypothesis is proven: an
+injected error burst is ranked #1 by Poisson surprise, and that result is locked behind a
+passing acceptance test.
+
+**Built and verified**
+
+| Module | Status | Notes |
+|---|---|---|
+| `models.LogRecord` | ✅ | five-field contract: `ts, level, message, raw, lineno` |
+| `ingest.read_hdfs` | ✅ | streaming generator; 2000/2000 sample lines parse with a timestamp (**A3 met**) |
+| `mining.mine` | ✅ | Drain3 wrapper + `drain3.ini` masking; 17 templates on the 2k sample, within range of the reference CSV (**A2 met**) |
+| `windowing.diff` | ✅ | record-count midpoint split; NEW/SPIKE/VANISHED; carries `samples`; ranks by score |
+| `scoring.poisson_surprise` | ✅ | `-ln P(X ≥ k \| λ = base + α)`, α = 0.5, log-space via `scipy` |
+| `tests/synthetic.py` | ✅ | reusable burst-injection helper |
+| `tests/test_pipeline.py` | ✅ | **A4** as an automated acceptance test — burst ranks top-3 (in fact #1) |
+
+**A4 result:** under raw count-delta the injected burst (0→25) ranked #4 (fail); under Poisson
+surprise it ranks **#1, score 75.8** vs 7.6 for the next item. This is the D2/D4 thesis
+demonstrated empirically.
+
+**Not yet done (closes M1):**
+- **A1** — `loglens analyze <file>` CLI does not exist yet (`cli.py` is next).
+- **A5** — only the A4 acceptance test exists; unit tests for `ingest`, `mining`,
+  `scoring`, plus a GitHub Actions CI workflow (`ruff` + `pytest`), still to write.
+
+**Next course of action (in order):**
+1. `cli.py` — thin `typer` app wiring ingest → mine → split → diff, printing a ranked table with sample lines (satisfies **A1**).
+2. Unit tests (`poisson_surprise`, ingest parse-rate, Drain3 count) + GitHub Actions CI (satisfies **A5**, closes M1).
+3. M3 robust ingest, then M5 LLM summary layer.
 
 ---
 
@@ -164,11 +199,25 @@ proceed to M2 or whether masking/windowing needs rework first.
 | Timestamp detection fails on exotic formats | bad windows | override flags + line-count fallback (F4) |
 | Scope creep (dashboards, DL models) | never ships | non-goals §3; milestone gates §8 |
 
-## 11. Open Questions
+## 11. Open Questions & Decision Log
 
+**Decided**
+- **D-a (2026-07-21) — PoC split method:** baseline/window split at the **record-count
+  midpoint** (`len(pairs)//2`), not the time midpoint. Rationale: on bursty logs a time
+  midpoint can starve one side; a count midpoint keeps both sides comparable and is robust to
+  records with `ts=None`. Revisit for real windowing in M3 (`--baseline/--window` durations).
+- **D-b (2026-07-21) — smoothing constant α = 0.5:** additive/Jeffreys prior on λ. Keeps
+  genuine one-off new lines near the score floor while a burst of ≥5–6 rises to the top;
+  avoids the λ=0 → infinite-score trap for NEW templates.
+
+**Open**
 - **Q1.** Window/baseline defaults: fixed (24h/15m) or derived from the file's time span?
 - **Q2.** VANISHED detection threshold: how regular must a template be to count as a heartbeat?
+- **Q2b.** *(new)* Poisson surprise is **one-sided** (upper tail), so VANISHED templates
+  (`window_count = 0`) always score 0 and cannot rank. A lower-tail / two-sided score is needed
+  before VANISHED is meaningful. Deferred — A4 concerns bursts, not disappearances.
 - **Q3.** Digest size vs summary quality trade-off: how many samples per anomaly (2? 5?).
+  Currently capped at 3 in `diff()`.
 - **Q4.** Streamlit demo in v1 or defer to v1.1?
 
 ## 12. References
