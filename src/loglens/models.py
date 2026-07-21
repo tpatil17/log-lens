@@ -9,3 +9,4 @@ class LogRecord:
     raw: str       # original line, untouched
     lineno: int
 
+

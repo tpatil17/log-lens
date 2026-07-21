@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from loglens.models import LogRecord
+from loglens.scoring import poisson_surprise
 
 
 @dataclass
@@ -13,7 +14,8 @@ class Anomaly:
     base_count: int
     window_count: int
     delta: int
-
+    score: float
+    samples: list[str] | None = None
 
 def diff(
     baseline: Iterable[tuple[LogRecord, int]],
@@ -29,19 +31,28 @@ def diff(
     # 2. loop the union of template ids
     union = set(base_count.keys()).union(set(window_count.keys()))
 
-    for id in union:
-        bc = base_count.get(id, 0)
-        wc = window_count.get(id, 0)
-        delta = wc - bc
+    window_samples: dict[int, list[str]] = {}
+
+    for rec, tid in window:
+        if len(window_samples.setdefault(tid, [])) < 3:
+            window_samples[tid].append(rec.message)
+
+    for tid in union:
+        bc = base_count.get(tid, 0)
+        wc = window_count.get(tid, 0)
+        delta = wc - bc #legacy scoring
+        score = poisson_surprise(bc, wc)
         if bc == 0 and wc > 0:
             kind = "NEW"
         elif bc > 0 and wc == 0:
             kind = "VANISHED"
         elif bc > 0 and wc > 0 and delta > 0:
             kind = "SPIKE"
-        result.append(Anomaly(template_id=id, kind=kind, base_count=bc, window_count=wc, delta=delta))
+        else:
+            continue
+        result.append(Anomaly(template_id=tid, kind=kind, base_count=bc, window_count=wc, delta=delta, score=score, samples=window_samples.get(tid, [])))
     
-    result.sort(key=lambda a: a.delta, reverse=True)
+    result.sort(key=lambda a: a.score, reverse=True)
 
     return result
     # 3. classify NEW / SPIKE / VANISHED, build Anomaly

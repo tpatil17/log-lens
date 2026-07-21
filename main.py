@@ -1,8 +1,11 @@
 from loglens.ingest import read_hdfs
 from loglens.mining import mine
 from loglens.windowing import diff
+from tests.synthetic import inject_burst
 
-pairs = list(mine(read_hdfs("tests/data/HDFS_2k.log")))
+records = inject_burst(read_hdfs("tests/data/HDFS_2k.log"), count=30)
+pairs = list(mine(records))
 mid = len(pairs) // 2
-for a in diff(pairs[:mid], pairs[mid:])[:5]:
-    print(a)
+ranked = diff(pairs[:mid], pairs[mid:])
+for a in ranked[:5]:
+    print(a.samples)
