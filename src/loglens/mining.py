@@ -1,8 +1,10 @@
 
-from drain3.template_miner_config import TemplateMinerConfig
-from drain3 import TemplateMiner
+from collections.abc import Iterable, Iterator
 from pathlib import Path
-from typing import Iterable, Iterator
+
+from drain3 import TemplateMiner
+from drain3.template_miner_config import TemplateMinerConfig
+
 from loglens.models import LogRecord
 
 INI_PATH = Path(__file__).parent / "drain3.ini"

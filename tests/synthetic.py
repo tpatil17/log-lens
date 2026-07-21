@@ -6,8 +6,8 @@ them AFTER the real logs so the record-count midpoint split drops the whole
 burst into the *window*, with zero occurrences in the baseline.
 """
 
+from collections.abc import Iterable
 from datetime import timedelta
-from typing import Iterable
 
 from loglens.models import LogRecord
 

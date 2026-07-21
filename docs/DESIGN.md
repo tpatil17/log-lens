@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Author** | Tanishq Patil |
-| **Status** | Active — M1 nearly complete, M2 detection proven |
+| **Status** | Active — M1 complete, M2 detection proven; M3 next |
 | **Created** | 2026-07-15 |
 | **Updated** | 2026-07-21 |
 | **Version** | 0.2 |
@@ -32,15 +32,17 @@ passing acceptance test.
 surprise it ranks **#1, score 75.8** vs 7.6 for the next item. This is the D2/D4 thesis
 demonstrated empirically.
 
-**Not yet done (closes M1):**
-- **A1** — `loglens analyze <file>` CLI does not exist yet (`cli.py` is next).
-- **A5** — only the A4 acceptance test exists; unit tests for `ingest`, `mining`,
-  `scoring`, plus a GitHub Actions CI workflow (`ruff` + `pytest`), still to write.
+**M1 complete — all acceptance criteria met:**
+- **A1** — `loglens analyze <file>` (thin `typer`/`rich` CLI) prints a ranked table. ✅
+- **A5** — unit tests for `ingest` (A3 + F4), `mining` (A2 + masking), and `scoring`
+  (six Poisson properties), plus a GitHub Actions CI workflow (`ruff` + `pytest`,
+  Python 3.10/3.12). 13 tests green, lint clean. ✅
 
 **Next course of action (in order):**
-1. `cli.py` — thin `typer` app wiring ingest → mine → split → diff, printing a ranked table with sample lines (satisfies **A1**).
-2. Unit tests (`poisson_surprise`, ingest parse-rate, Drain3 count) + GitHub Actions CI (satisfies **A5**, closes M1).
-3. M3 robust ingest, then M5 LLM summary layer.
+1. **M3 — robust ingest:** format auto-detection (JSON-lines, logfmt), multiline/stack-trace
+   merging, stdin/gzip, timestamp fallback (F1–F4). `loglens inspect` across ≥5 formats.
+2. **M4 — evaluation:** precision/recall vs the labeled HDFS dataset; reproducible `make eval`.
+3. **M5 — LLM layer:** top-k digest → Claude summary; `--no-llm` identical minus the narrative.
 
 ---
 

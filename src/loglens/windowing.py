@@ -1,7 +1,7 @@
 # src/loglens/windowing.py
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 from loglens.models import LogRecord
 from loglens.scoring import poisson_surprise
@@ -17,11 +17,20 @@ class Anomaly:
     score: float
     samples: list[str] | None = None
 
+def split_midpoint(pairs: list[tuple[LogRecord, int]]):
+    """Split a time-ordered pair stream into (baseline, window) at the record-count midpoint."""
+    mid = len(pairs) // 2
+    return pairs[:mid], pairs[mid:]
+
 def diff(
     baseline: Iterable[tuple[LogRecord, int]],
     window: Iterable[tuple[LogRecord, int]],
 ) -> list[Anomaly]:
     """Compare template frequencies between two sides; rank by delta."""
+    # window is walked twice (counts, then samples), so materialize it to stay
+    # correct even when passed a one-shot generator. baseline is walked once.
+    window = list(window)
+
     # 1. Counter over template_ids for each side
     base_count = Counter(t for _, t in baseline)
     window_count = Counter(t for _, t in window)
@@ -50,7 +59,17 @@ def diff(
             kind = "SPIKE"
         else:
             continue
-        result.append(Anomaly(template_id=tid, kind=kind, base_count=bc, window_count=wc, delta=delta, score=score, samples=window_samples.get(tid, [])))
+        result.append(
+            Anomaly(
+                template_id=tid,
+                kind=kind,
+                base_count=bc,
+                window_count=wc,
+                delta=delta,
+                score=score,
+                samples=window_samples.get(tid, []),
+            )
+        )
     
     result.sort(key=lambda a: a.score, reverse=True)
 
