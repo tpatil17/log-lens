@@ -1,13 +1,13 @@
 # tests/test_pipeline.py
 from tests.synthetic import inject_burst
 
-from loglens.ingest import read_hdfs
+from loglens.ingest import read
 from loglens.mining import mine
 from loglens.windowing import diff, split_midpoint
 
 
 def test_injected_burst_ranks_top_3():
-    records = inject_burst(read_hdfs("tests/data/HDFS_2k.log"), count=25)
+    records = inject_burst(read("tests/data/HDFS_2k.log"), count=25)
     pairs = list(mine(records))
     pair1, pair2 = split_midpoint(pairs)
     ranked = diff(pair1, pair2)

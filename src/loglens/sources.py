@@ -16,23 +16,10 @@ from pathlib import Path
 def open_lines(source: str | Path) -> Iterator[str]:
     """Yield text lines (newline stripped) from a file, stdin, or a .gz file.
 
-    YOUR TASK — three cases to handle, all streaming (N1: never read the whole
-    file into memory):
-
-    1. stdin: if `source == "-"`, read from `sys.stdin` line by line.
-    2. gzip:  if the path ends in ".gz", open with `gzip.open(path, mode="rt")`
-              ("rt" = read *text*, so you get str not bytes).
-    3. plain: otherwise `open(path, encoding="utf-8", errors="replace")`.
-
-    In all three, `yield line.rstrip("\\n")` per line.
-
-    Hints:
-      - Cases 2 and 3 both use a `with ... as f:` block then `for line in f:`.
-        Can you avoid duplicating the loop? (e.g. pick the opener first, then
-        one shared loop.)
-      - `errors="replace"` keeps a stray bad byte from crashing the read (F4).
-      - Think: does stdin need a `with` block? (You don't own sys.stdin — don't
-        close it.)
+    Streams line by line (N1: never loads the whole file). `source == "-"` reads
+    stdin (not wrapped in `with`, since we don't own it); a ".gz" suffix is read
+    as decompressed text; anything else is a plain UTF-8 file. `errors="replace"`
+    keeps a stray bad byte from crashing the read (F4).
     """
     if source == "-":
         # Case 1: read from stdin

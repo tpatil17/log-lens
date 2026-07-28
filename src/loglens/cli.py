@@ -2,7 +2,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from loglens.ingest import read_hdfs
+from loglens.ingest import read
 from loglens.mining import mine
 from loglens.windowing import Anomaly, diff, split_midpoint
 
@@ -24,7 +24,7 @@ def main():
 @app.command()
 def analyze(path: str, top: int = 10):
     """Rank what changed between the baseline and recent window of a log file."""
-    pairs = list(mine(read_hdfs(path)))
+    pairs = list(mine(read(path)))
     baseline, window = split_midpoint(pairs)
     anomalies = diff(baseline, window)
     _render(anomalies[:top], source=path)

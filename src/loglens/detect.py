@@ -17,18 +17,14 @@ CONFIDENCE_THRESHOLD = 0.5
 def detect(sample: Sequence[str]) -> Parser:
     """Pick the best parser for a sample of lines.
 
-    YOUR TASK:
-      1. Score every parser: `parser.confidence(sample)` for parser in PARSERS.
-      2. Choose the highest-scoring parser.
-      3. If that top score is below CONFIDENCE_THRESHOLD, return a
-         PlaintextParser() as the graceful fallback instead.
-
-    Tie-break (already handled for you *if* you rely on order): PARSERS lists
-    the more-structured formats first, and Python's max() keeps the FIRST max it
-    sees — so iterate in PARSERS order and JSON wins a tie over logfmt, etc.
-    (Careful: does `max(PARSERS, key=...)` preserve that order? Test it — write
-    a sample that two parsers tie on and confirm the structured one wins.)
-
-    Return: the chosen Parser instance.
+    Scores every parser by confidence over the sample and returns the highest.
+    Ties break toward more-structured formats because PARSERS is ordered
+    JSON > logfmt > plaintext and max() keeps the first top scorer. If the best
+    score is below CONFIDENCE_THRESHOLD, falls back to plaintext (F4).
     """
-    raise NotImplementedError("implement detect: score parsers, apply threshold")
+    # max() returns the FIRST parser achieving the top score, and PARSERS is
+    # ordered most-structured-first, so ties break toward JSON > logfmt > plaintext.
+    best = max(PARSERS, key=lambda p: p.confidence(sample))
+    if best.confidence(sample) < CONFIDENCE_THRESHOLD:
+        return PlaintextParser()  # F4 fallback: parse as raw, ts=None
+    return best

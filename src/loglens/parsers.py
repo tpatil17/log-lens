@@ -9,11 +9,12 @@ Add a new format later => add one class here, register it in PARSERS, and
 nothing else in the codebase changes.
 """
 
+import json
 import re
 from collections.abc import Sequence
 from datetime import datetime
 from typing import Protocol
-import json
+
 from loglens.models import LogRecord
 
 
@@ -72,8 +73,8 @@ def _extract(data: dict) -> tuple[datetime | None, str | None, str | None]:
 
 
 # --- Plaintext (HDFS + friends) -------------------------------------------
-# This one is DONE — it's your existing read_hdfs logic, now behind the Parser
-# interface. Use it as the worked example for the two you write below.
+# Matches the HDFS line format; non-matching lines still return a raw record
+# (ts=None) so nothing is ever dropped (F4).
 
 class PlaintextParser:
     name = "plaintext-hdfs"
@@ -101,24 +102,12 @@ class JsonParser:
     name = "json"
 
     def parse(self, line: str, lineno: int) -> LogRecord | None:
-        """YOUR TASK — parse one JSON-lines record.
+        """Parse one JSON-lines record into a LogRecord, or None if not JSON.
 
-        Steps to work through:
-          1. `line.strip()` — if it doesn't start with '{', it's not JSON; return None.
-          2. `json.loads(line)` inside try/except — on failure return None (F4:
-             a broken JSON line shouldn't kill the run).
-          3. From the resulting dict, pull the fields into a LogRecord:
-               - timestamp: real logs use varied keys — check "ts", "time",
-                 "timestamp", "@timestamp". Which are present? Parse the first
-                 one you find. (ISO 8601 strings: `datetime.fromisoformat` —
-                 watch the trailing 'Z', which older Python can't parse.)
-               - level:   keys like "level", "severity", "lvl".
-               - message: keys like "msg", "message", "event".
-          4. `raw` = the original line; `message` = the extracted message (or the
-             whole line if there's no message field).
-
-        Design question to answer in code: what if the JSON is valid but has no
-        timestamp field? (Hint: ts=None is allowed — same F4 spirit.)
+        Only JSON *objects* count (valid JSON like "[1,2]" or "42" is rejected);
+        broken or empty lines return None (F4). Timestamp/level/message are
+        pulled via the shared key hunt; a record with no timestamp is allowed
+        (ts=None).
         """
         # .startswith is empty-string-safe; string[0] would IndexError on "".
         # A JSON *object* always starts with '{' — anything else isn't a record.
@@ -155,21 +144,25 @@ class LogfmtParser:
     KV = re.compile(r'(\w+)=("[^"]*"|\S+)')
 
     def parse(self, line: str, lineno: int) -> LogRecord | None:
-        """YOUR TASK — parse one logfmt line into a LogRecord.
+        """Parse one logfmt line into a LogRecord, or None if not logfmt.
 
-        Steps:
-          1. Use `self.KV.findall(line)` -> list of (key, value) pairs. If you
-             get fewer than ~2 pairs, this probably isn't logfmt; return None.
-          2. Build a dict from the pairs. Strip surrounding quotes from values
-             (the regex keeps the quotes on quoted values).
-          3. Same field extraction as JSON: ts/time/timestamp, level, msg/message.
-          4. Return the LogRecord (raw = original line).
-
-        Think about: logfmt and a plaintext line with one 'foo=bar' in it could
-        both match weakly. Your confidence() over a real sample is what breaks
-        the tie — a true logfmt file scores high, an accidental match scores low.
+        Extracts key=value pairs; fewer than two pairs is treated as not logfmt
+        (returns None). Quoted values are unquoted, then timestamp/level/message
+        are pulled via the shared key hunt.
         """
-        raise NotImplementedError("implement LogfmtParser.parse")
+        pairs = self.KV.findall(line)
+        # Fewer than two key=value pairs => almost certainly not logfmt.
+        if len(pairs) < 2:
+            return None
+        data = {k: v.strip('"') for k, v in pairs}
+        ts, level, message = _extract(data)
+        return LogRecord(
+            ts=ts,
+            level=level,
+            message=message if message is not None else line,
+            raw=line,
+            lineno=lineno,
+        )
 
     def confidence(self, sample: Sequence[str]) -> float:
         return _confidence_from_parse(self, sample)

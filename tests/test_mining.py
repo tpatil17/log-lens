@@ -7,20 +7,20 @@ so a drain3 version bump doesn't break the suite).
 
 from pathlib import Path
 
-from loglens.ingest import read_hdfs
+from loglens.ingest import read
 from loglens.mining import mine
 
 SAMPLE = Path(__file__).parent / "data" / "HDFS_2k.log"
 
 
 def test_every_record_gets_a_template():
-    pairs = list(mine(read_hdfs(SAMPLE)))
+    pairs = list(mine(read(SAMPLE)))
     assert len(pairs) == 2000
     assert all(isinstance(tid, int) for _, tid in pairs)
 
 
 def test_a2_template_count_is_sane():
-    template_ids = {tid for _, tid in mine(read_hdfs(SAMPLE))}
+    template_ids = {tid for _, tid in mine(read(SAMPLE))}
     # Reference ~ mid-teens for the 2k sample; assert within 2x, not 10x.
     assert 10 <= len(template_ids) <= 30
 

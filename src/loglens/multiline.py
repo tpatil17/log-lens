@@ -16,21 +16,10 @@ CONTINUATION = re.compile(r"^(\s+|Caused by:|\.\.\.\s*\d+\s+more)")
 def merge(lines: Iterator[str]) -> Iterator[str]:
     """Yield logical lines: continuation lines folded into their parent.
 
-    YOUR TASK — a classic buffer-and-flush loop:
-      1. Keep a `buffer` holding the current logical line (start empty/None).
-      2. For each physical line:
-           - if it looks like a CONTINUATION and we have a buffer:
-                 append it to the buffer (e.g. buffer += "\\n" + line) and move on.
-           - otherwise it starts a NEW record:
-                 if the buffer is non-empty, `yield` it first, then set
-                 buffer = line.
-      3. After the loop, don't forget to `yield` the final buffered line
-         (the flush — a very common bug is dropping the last record).
-
-    Design question: what decides "is this a continuation"? For now the regex
-    above (indented or Caused-by). Keep it dumb; you can make it format-aware
-    later. What should happen to a continuation line that appears with NO parent
-    (file starts mid-trace)? Decide and handle it.
+    A buffer-and-flush loop: continuation lines (per CONTINUATION — indented or
+    "Caused by:") are appended to the current buffer; any other line flushes the
+    buffer and starts a new record. The final buffer is flushed after the loop.
+    A continuation with no parent (file starts mid-trace) becomes its own record.
     """
     buffer = None
     for line in lines:
