@@ -3,14 +3,14 @@
 | | |
 |---|---|
 | **Author** | Tanishq Patil |
-| **Status** | Active — M1 complete, M2 detection proven; M3 next |
+| **Status** | Active — M1–M3 complete, M2 detection proven; M4 next |
 | **Created** | 2026-07-15 |
-| **Updated** | 2026-07-21 |
-| **Version** | 0.2 |
+| **Updated** | 2026-07-28 |
+| **Version** | 0.3 |
 
 ---
 
-## 0. Current Status (2026-07-21)
+## 0. Current Status (2026-07-28)
 
 The statistical **detection** pipeline is built and its core hypothesis is proven: an
 injected error burst is ranked #1 by Poisson surprise, and that result is locked behind a
@@ -38,11 +38,21 @@ demonstrated empirically.
   (six Poisson properties), plus a GitHub Actions CI workflow (`ruff` + `pytest`,
   Python 3.10/3.12). 13 tests green, lint clean. ✅
 
+**M3 complete — robust multi-format ingest.** The ingest layer is now four modules
+(`sources`, `multiline`, `parsers`, `detect`) behind the `read()` dispatcher, with nothing
+downstream changed — the payoff of the `LogRecord` contract (D5). Delivered:
+- Source layer: file / stdin (`-`) / gzip, all streaming (N1).
+- Sniff-and-vote format detection: JSON, logfmt, plaintext, with a plaintext fallback below
+  a 0.5 confidence threshold (F4). Ties break toward more-structured formats.
+- Multiline/stack-trace folding; unparseable lines kept as `ts=None` records, never dropped (F4).
+- `loglens inspect <file>` reports the format vote, parse rate, and a preview — verified on
+  ≥5 formats (HDFS, JSON, logfmt, gzip, unknown-fallback). 51 tests green, lint clean.
+- `read_hdfs` retired; all callers route through `read()`.
+
 **Next course of action (in order):**
-1. **M3 — robust ingest:** format auto-detection (JSON-lines, logfmt), multiline/stack-trace
-   merging, stdin/gzip, timestamp fallback (F1–F4). `loglens inspect` across ≥5 formats.
-2. **M4 — evaluation:** precision/recall vs the labeled HDFS dataset; reproducible `make eval`.
-3. **M5 — LLM layer:** top-k digest → Claude summary; `--no-llm` identical minus the narrative.
+1. **M4 — evaluation:** precision/recall vs the labeled HDFS dataset; reproducible `make eval`.
+2. **M5 — LLM layer:** top-k digest → Claude summary; `--no-llm` identical minus the narrative.
+3. Small wins: `--json` output (F7); lower-tail scoring so VANISHED can rank (Q2b).
 
 ---
 

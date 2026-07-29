@@ -15,6 +15,16 @@ from loglens.models import LogRecord
 from loglens.multiline import merge
 from loglens.sources import open_lines
 
+SAMPLE_SIZE = 50  # lines peeked for format detection
+
+
+def sample_lines(source: str | Path, n: int = SAMPLE_SIZE) -> list[str]:
+    """Return the first `n` logical (multiline-merged) lines of a source.
+
+    Used for format detection by both `read()` and the `inspect` command."""
+    merged = merge(open_lines(source))
+    return list(itertools.islice(merged, n))
+
 
 def read(source: str | Path) -> Iterator[LogRecord]:
     """Auto-detect the format of `source` and yield LogRecords.
@@ -30,7 +40,7 @@ def read(source: str | Path) -> Iterator[LogRecord]:
 
     # Peek the first ~50 logical lines to detect the format, then chain them
     # back so the parse loop still sees every line. Streaming is preserved.
-    sample = list(itertools.islice(merged, 50))
+    sample = list(itertools.islice(merged, SAMPLE_SIZE))
     if not sample:
         return  # empty source: nothing to yield
     parser = detect(sample)

@@ -14,6 +14,14 @@ from loglens.parsers import PARSERS, Parser, PlaintextParser
 CONFIDENCE_THRESHOLD = 0.5
 
 
+def score_formats(sample: Sequence[str]) -> list[tuple[str, float]]:
+    """Confidence of each parser over the sample, in PARSERS order.
+
+    Returns (name, confidence) pairs — the raw 'vote' that `inspect` displays
+    and that `detect` reduces to a single winner."""
+    return [(p.name, p.confidence(sample)) for p in PARSERS]
+
+
 def detect(sample: Sequence[str]) -> Parser:
     """Pick the best parser for a sample of lines.
 
@@ -22,9 +30,9 @@ def detect(sample: Sequence[str]) -> Parser:
     JSON > logfmt > plaintext and max() keeps the first top scorer. If the best
     score is below CONFIDENCE_THRESHOLD, falls back to plaintext (F4).
     """
-    # max() returns the FIRST parser achieving the top score, and PARSERS is
-    # ordered most-structured-first, so ties break toward JSON > logfmt > plaintext.
-    best = max(PARSERS, key=lambda p: p.confidence(sample))
-    if best.confidence(sample) < CONFIDENCE_THRESHOLD:
+    # Compute each confidence once (parsing the sample isn't free).
+    scores = {p: p.confidence(sample) for p in PARSERS}
+    best = max(PARSERS, key=lambda p: scores[p])
+    if scores[best] < CONFIDENCE_THRESHOLD:
         return PlaintextParser()  # F4 fallback: parse as raw, ts=None
     return best

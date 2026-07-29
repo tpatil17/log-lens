@@ -2,7 +2,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from loglens.ingest import read
+from loglens.detect import detect, score_formats
+from loglens.ingest import read, sample_lines
 from loglens.mining import mine
 from loglens.windowing import Anomaly, diff, split_midpoint
 
@@ -28,6 +29,50 @@ def analyze(path: str, top: int = 10):
     baseline, window = split_midpoint(pairs)
     anomalies = diff(baseline, window)
     _render(anomalies[:top], source=path)
+
+
+@app.command()
+def inspect(path: str):
+    """Detect a log file's format and summarize its structure (no analysis)."""
+    sample = sample_lines(path)
+    if not sample:
+        console.print(f"[yellow]{path} is empty.[/yellow]")
+        return
+    scores = score_formats(sample)
+    chosen = detect(sample)
+    records = [chosen.parse(line, i) for i, line in enumerate(sample, start=1)]
+    _render_inspect(path, chosen.name, scores, records)
+
+
+def _render_inspect(path, chosen_name, scores, records) -> None:
+    """Render the inspect summary. Pure formatting — no logic."""
+    with_ts = sum(1 for r in records if r is not None and r.ts is not None)
+    parse_rate = with_ts / len(records) if records else 0.0
+
+    votes = Table(title=f"LogLens inspect — {path}")
+    votes.add_column("format")
+    votes.add_column("confidence", justify="right")
+    for name, conf in scores:
+        if name == chosen_name:
+            votes.add_row(f"[bold green]{name}[/]", f"[bold green]{conf:.0%}  ◄ detected[/]")
+        else:
+            votes.add_row(name, f"{conf:.0%}")
+    console.print(votes)
+    console.print(
+        f"Sampled [bold]{len(records)}[/bold] lines · "
+        f"detected [bold]{chosen_name}[/bold] · "
+        f"[bold]{parse_rate:.0%}[/bold] carry a timestamp"
+    )
+
+    preview = Table(title="Preview", show_lines=False)
+    preview.add_column("ts", no_wrap=True)
+    preview.add_column("level", no_wrap=True)
+    preview.add_column("message", overflow="ellipsis", max_width=70)
+    for r in records[:3]:
+        if r is None:
+            continue
+        preview.add_row(str(r.ts) if r.ts else "—", r.level or "—", r.message)
+    console.print(preview)
 
 
 def _render(anomalies: list[Anomaly], source: str = "") -> None:
