@@ -65,37 +65,100 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-Run the test suite (includes the A4 acceptance test):
+Run the test suite (includes the A4 acceptance test) and the linter:
 
 ```bash
-pytest
+make test    # pytest
+make lint    # ruff
 ```
+
+## Usage
+
+```bash
+loglens analyze app.log            # rank what's new/spiking/vanished
+loglens analyze app.log --explain  # + plain-English explanation (OpenAI)
+loglens inspect app.log            # detect format + preview (before analyzing)
+```
+
+`analyze` and `inspect` auto-detect the log format (JSON, logfmt, plaintext),
+handle gzip and stdin, and fold multiline stack traces.
+
+`--explain` is opt-in (tokens are spent only when you ask). It sends a compact
+~1–2 KB digest of the *top anomalies only* — never your raw logs — to OpenAI, and
+the model is constrained to explain that digest and label causes as hypotheses.
+Needs `OPENAI_API_KEY`; without it the report prints as normal and the step is
+skipped.
+
+## Evaluation
+
+Two evaluations share one precision/recall/F1 core (`loglens.eval`):
+
+**Injection eval** — needs no external data, so it runs in CI. It injects
+synthetic bursts of varying size and reports detection rank:
+
+```
+$ make eval
+ size   rank   detected@3
+    3      3   True
+    5      1   True
+   10      1   True
+   40      1   True
+```
+
+So the detector reliably surfaces bursts of ≥5 at rank #1, and even a burst of 3
+lands in the top 3.
+
+**Block-level eval** — against the real HDFS_v1 labels (575,061 blocks, 16,838
+anomalies). Each block is scored by the surprise of its rarest present event type
+(`-log P(template present)` — the same "surprise vs baseline" idea, using template
+*presence* as the observable), then compared to the ground-truth labels:
+
+| metric | score |
+|---|---|
+| precision | 0.87 |
+| recall | 0.83 |
+| **F1** | **0.85** |
+
+An unsupervised, untrained detector reaching 0.85 F1 on the standard HDFS
+benchmark. Reproduce from loghub's precomputed occurrence matrix:
+
+```bash
+make eval-matrix MATRIX=data/HDFS_v1/preprocessed/Event_occurrence_matrix.csv
+```
+
+(Full labeled HDFS_v1 supplied locally; the ~1.5 GB dataset isn't committed.)
 
 ## Project layout
 
 ```
 src/loglens/
   models.py      # LogRecord — the universal typed contract between stages
-  ingest.py      # read_hdfs(): file → Iterator[LogRecord] (streaming)
+  sources.py     # open_lines(): file / stdin / gzip → lines (streaming)
+  multiline.py   # merge(): fold stack traces into one logical record
+  parsers.py     # JSON / logfmt / plaintext parsers (uniform interface)
+  detect.py      # sniff-and-vote format detection
+  ingest.py      # read(): auto-detect + parse → Iterator[LogRecord]
   mining.py      # mine(): records → (record, template_id) via Drain3 + masking
   scoring.py     # poisson_surprise(): the statistical surprise metric
   windowing.py   # diff(): baseline vs window → ranked list[Anomaly]
+  digest.py      # compress top-k anomalies → compact structured digest
+  summarize.py   # digest → OpenAI → English explanation (optional)
+  eval.py        # precision/recall harness (injection + block-level)
+  cli.py         # loglens analyze / inspect (thin typer/rich adapters)
   drain3.ini     # Drain3 masking config (block IDs, etc.)
-tests/
-  synthetic.py       # burst-injection helper for the A4 test
-  test_pipeline.py   # A4: injected burst must rank in the top 3
-  data/              # HDFS_2k.log + reference templates
-docs/
-  DESIGN.md      # full design document, decisions, milestones, status
+tests/           # unit + acceptance tests, HDFS_2k sample data
+docs/DESIGN.md   # full design document, decisions, milestones, status
 ```
 
 ## Roadmap
 
-1. **`cli.py`** — `loglens analyze <file>` prints a ranked "what changed" table.
-2. **Unit tests + CI** — per-module tests and a GitHub Actions workflow (`ruff` + `pytest`).
-3. **Robust ingest** — format auto-detection (JSON, logfmt), multiline, stdin/gzip.
-4. **Evaluation** — precision/recall against the labeled HDFS dataset.
-5. **LLM layer** — digest → Claude summary, fully optional (`--no-llm`).
+Done: end-to-end pipeline, Poisson scoring, `analyze`/`inspect` CLI, multi-format
+ingest, unit + acceptance tests with CI, the evaluation harness (HDFS F1 0.85), and
+the optional LLM explanation layer (`--explain`). Next:
+
+1. **JSON output** (`--json`) for scripting.
+2. **Lower-tail scoring** so vanished logs can rank (currently one-sided).
+3. **Packaging** — PyPI, Docker, a `watch` mode, demo GIF.
 
 ## License
 

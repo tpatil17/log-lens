@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Author** | Tanishq Patil |
-| **Status** | Active — M1–M3 complete, M2 detection proven; M4 next |
+| **Status** | Active — M1–M5 complete (HDFS F1 0.85, LLM layer shipped); M6 packaging next |
 | **Created** | 2026-07-15 |
 | **Updated** | 2026-07-28 |
 | **Version** | 0.3 |
@@ -49,10 +49,44 @@ downstream changed — the payoff of the `LogRecord` contract (D5). Delivered:
   ≥5 formats (HDFS, JSON, logfmt, gzip, unknown-fallback). 51 tests green, lint clean.
 - `read_hdfs` retired; all callers route through `read()`.
 
+**M4 — evaluation harness built (`loglens.eval`).** Two evals sharing one
+precision/recall/F1 core:
+- **Injection eval** (no external data, runs in CI): injects synthetic bursts of
+  varying size and reports detection rank. Result on the 2k sample — bursts ≥5
+  rank #1, a burst of 3 ranks #3 (detected within top-3).
+- **Block-level eval** (real labels): evaluated on the full **HDFS_v1** dataset —
+  575,061 blocks, 16,838 anomalies (2.9%). Each block is scored by the surprise of
+  its rarest present event type, then compared to ground truth:
+  **precision 0.87, recall 0.83, F1 0.85** (`make eval-matrix`, runs in ~5s off
+  loghub's precomputed occurrence matrix). An unsupervised, untrained detector at
+  0.85 F1 on the standard benchmark.
+
+**Decision D-c (2026-07-28) — presence-surprise for blocks.** The first attempt
+scored blocks by *count* surprise (Poisson, observed vs expected count) and failed:
+precision 0.09 (F1 0.17), because raw counts are confounded by block size — large
+normal blocks look anomalous. The fix keeps the "surprise vs baseline" thesis but
+changes the *observable* to template **presence**: `-log P(template present)`
+(Bernoulli surprise / IDF). HDFS anomalies are marked by *which* rare event types
+occur, not how many. This lifted F1 from 0.17 → 0.85. The streaming tool still uses
+count surprise (bursts are count spikes); block detection uses presence surprise —
+same principle, right observable per unit.
+
+**M5 complete — optional LLM explanation layer.** Two stages behind the detector:
+- `digest.build_digest` — compresses the top-k anomalies into a compact (~1–2 KB),
+  deterministic, stdlib-only structured object. This is the privacy + cost boundary:
+  raw logs never leave the machine, only the digest does (G5).
+- `summarize.summarize` — sends the digest to OpenAI (SDK) with a prompt constrained
+  to explain only the digest and label causes as **hypotheses** (Risk #3), returning
+  structured JSON (`summary`, `hypotheses`, `suggested_actions`) at temperature 0.
+- Opt-in via `loglens analyze --explain` (tokens spent only on demand). Missing
+  `OPENAI_API_KEY` or `openai` package degrades gracefully to the normal report plus
+  a one-line notice (F8). Tested with an injected fake client — CI never hits the API.
+
 **Next course of action (in order):**
-1. **M4 — evaluation:** precision/recall vs the labeled HDFS dataset; reproducible `make eval`.
-2. **M5 — LLM layer:** top-k digest → Claude summary; `--no-llm` identical minus the narrative.
-3. Small wins: `--json` output (F7); lower-tail scoring so VANISHED can rank (Q2b).
+1. Small wins: `--json` output (F7); lower-tail scoring so VANISHED can rank (Q2b).
+2. **M6 — packaging:** PyPI, Docker, `watch` mode, README + demo GIF.
+3. Eval rigor: the block threshold is in-sample (F1-optimal operating point); a
+   train/test split would report a held-out number.
 
 ---
 

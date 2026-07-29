@@ -2,9 +2,20 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+# Load a local .env (project root) so OPENAI_API_KEY can live in a file instead
+# of the shell. Optional — if python-dotenv isn't installed we just read os.environ.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass
+
 from loglens.detect import detect, score_formats
+from loglens.digest import build_digest
 from loglens.ingest import read, sample_lines
 from loglens.mining import mine
+from loglens.summarize import DEFAULT_MODEL, LLMUnavailable, summarize
 from loglens.windowing import Anomaly, diff, split_midpoint
 
 app = typer.Typer(help="Find what's new, spiking, or vanished in your logs.")
@@ -23,12 +34,26 @@ def main():
 
 
 @app.command()
-def analyze(path: str, top: int = 10):
-    """Rank what changed between the baseline and recent window of a log file."""
+def analyze(path: str, top: int = 10, explain: bool = False, model: str = DEFAULT_MODEL):
+    """Rank what changed between the baseline and recent window of a log file.
+
+    Pass --explain to send a compact digest of the top anomalies to OpenAI for a
+    plain-English explanation (needs OPENAI_API_KEY; tokens spent only on demand).
+    """
     pairs = list(mine(read(path)))
     baseline, window = split_midpoint(pairs)
     anomalies = diff(baseline, window)
     _render(anomalies[:top], source=path)
+
+    if explain and anomalies:
+        digest = build_digest(anomalies, source=path)
+        try:
+            explanation = summarize(digest, model=model)
+        except LLMUnavailable as e:
+            # F8: degrade gracefully — the report above is unaffected.
+            console.print(f"\n[dim]LLM explanation skipped: {e}[/dim]")
+        else:
+            _render_explanation(explanation)
 
 
 @app.command()
@@ -73,6 +98,20 @@ def _render_inspect(path, chosen_name, scores, records) -> None:
             continue
         preview.add_row(str(r.ts) if r.ts else "—", r.level or "—", r.message)
     console.print(preview)
+
+
+def _render_explanation(exp) -> None:
+    """Render the LLM explanation. Pure formatting — no logic."""
+    console.print("\n[bold]Explanation[/bold] [dim](LLM hypotheses — verify before acting)[/dim]")
+    console.print(exp.summary)
+    if exp.hypotheses:
+        console.print("\n[bold]Possible causes[/bold]")
+        for h in exp.hypotheses:
+            console.print(f"  • {h}")
+    if exp.suggested_actions:
+        console.print("\n[bold]Suggested next steps[/bold]")
+        for a in exp.suggested_actions:
+            console.print(f"  • {a}")
 
 
 def _render(anomalies: list[Anomaly], source: str = "") -> None:

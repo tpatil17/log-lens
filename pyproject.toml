@@ -27,7 +27,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-llm = ["anthropic>=0.40"]
+llm = ["openai>=1.40", "python-dotenv>=1.0"]
 dev = ["pytest>=8.0", "ruff>=0.6"]
 
 [project.scripts]
