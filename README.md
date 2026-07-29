@@ -77,7 +77,9 @@ make lint    # ruff
 ```bash
 loglens analyze app.log            # rank what's new/spiking/vanished
 loglens analyze app.log --explain  # + plain-English explanation (OpenAI)
+loglens analyze app.log --json     # machine-readable output (pure JSON on stdout)
 loglens inspect app.log            # detect format + preview (before analyzing)
+loglens watch app.log              # tail live; alert on anomalies vs launch baseline
 ```
 
 `analyze` and `inspect` auto-detect the log format (JSON, logfmt, plaintext),
@@ -88,6 +90,31 @@ handle gzip and stdin, and fold multiline stack traces.
 the model is constrained to explain that digest and label causes as hypotheses.
 Needs `OPENAI_API_KEY`; without it the report prints as normal and the step is
 skipped.
+
+## Configuration (API key)
+
+The LLM step (`--explain`) uses **your own** OpenAI key, supplied at runtime.
+LogLens never ships, stores, or proxies a key — it calls OpenAI directly from your
+machine, so the key never leaves your control. Everything except `--explain` runs
+fully offline and needs no key.
+
+Provide the key in whichever way suits you:
+
+```bash
+# a) environment variable (current shell)
+export OPENAI_API_KEY="sk-..."
+
+# b) a .env file in the project root (auto-loaded; gitignored)
+cp .env.example .env    # then edit in your key
+
+# c) inline for one run
+OPENAI_API_KEY="sk-..." loglens analyze app.log --explain
+```
+
+Rules of thumb: never pass the key as a CLI flag (it leaks into shell history),
+never commit `.env`, and rotate the key in the OpenAI dashboard if it's ever
+exposed. In Docker, pass it at run time (`-e OPENAI_API_KEY=...` or
+`--env-file .env`) — never bake it into the image.
 
 ## Evaluation
 
@@ -140,7 +167,8 @@ src/loglens/
   ingest.py      # read(): auto-detect + parse → Iterator[LogRecord]
   mining.py      # mine(): records → (record, template_id) via Drain3 + masking
   scoring.py     # poisson_surprise(): the statistical surprise metric
-  windowing.py   # diff(): baseline vs window → ranked list[Anomaly]
+  windowing.py   # diff() / score_counts(): baseline vs window → ranked list[Anomaly]
+  watch.py       # live tailing: freeze baseline at launch, alert on the window
   digest.py      # compress top-k anomalies → compact structured digest
   summarize.py   # digest → OpenAI → English explanation (optional)
   eval.py        # precision/recall harness (injection + block-level)
@@ -156,9 +184,8 @@ Done: end-to-end pipeline, Poisson scoring, `analyze`/`inspect` CLI, multi-forma
 ingest, unit + acceptance tests with CI, the evaluation harness (HDFS F1 0.85), and
 the optional LLM explanation layer (`--explain`). Next:
 
-1. **JSON output** (`--json`) for scripting.
-2. **Lower-tail scoring** so vanished logs can rank (currently one-sided).
-3. **Packaging** — PyPI, Docker, a `watch` mode, demo GIF.
+1. **Lower-tail scoring** so vanished logs can rank (currently one-sided).
+2. **Packaging** — PyPI, Docker, a `watch` mode, demo GIF.
 
 ## License
 

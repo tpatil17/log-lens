@@ -82,9 +82,24 @@ same principle, right observable per unit.
   `OPENAI_API_KEY` or `openai` package degrades gracefully to the normal report plus
   a one-line notice (F8). Tested with an injected fake client — CI never hits the API.
 
+**M6 in progress — `watch` mode built.** `loglens watch <file>` tails a growing log,
+freezes the file's existing content as the baseline at launch, and alerts on
+anomalies in the rolling window (verified live: caught an appended error burst with
+escalating scores). Key design points:
+- Fixed baseline (fits deploy/on-call monitoring); mid-incident starts should use
+  `analyze` instead. `--min-baseline` warns (doesn't block) on a thin startup baseline.
+- **Rate normalization:** the baseline (whole file) and window (recent N) differ in
+  size, so the baseline is scaled to the window before scoring — otherwise sparse
+  normal templates would false-alarm as VANISHED (the M4 size-confounding lesson).
+- Shares one persistent Drain3 miner so template ids stay stable over time. (Also
+  fixed a reintroduced bug where `drain3.ini` masking wasn't being loaded.)
+- Known limitation: a pure flood of a NEW error can crowd normal templates out of
+  the window and trip spurious VANISHED alerts; realistic interleaved traffic
+  mitigates this. Future: suppress VANISHED when the window is burst-dominated.
+
 **Next course of action (in order):**
-1. Small wins: `--json` output (F7); lower-tail scoring so VANISHED can rank (Q2b).
-2. **M6 — packaging:** PyPI, Docker, `watch` mode, README + demo GIF.
+1. Remaining M6: PyPI build-readiness (LICENSE, `python -m build`), Dockerfile, demo GIF.
+2. Done: `--json` (F7); two-sided VANISHED scoring (Q2b); `watch` mode.
 3. Eval rigor: the block threshold is in-sample (F1-optimal operating point); a
    train/test split would report a held-out number.
 
@@ -259,9 +274,12 @@ proceed to M2 or whether masking/windowing needs rework first.
 **Open**
 - **Q1.** Window/baseline defaults: fixed (24h/15m) or derived from the file's time span?
 - **Q2.** VANISHED detection threshold: how regular must a template be to count as a heartbeat?
-- **Q2b.** *(new)* Poisson surprise is **one-sided** (upper tail), so VANISHED templates
-  (`window_count = 0`) always score 0 and cannot rank. A lower-tail / two-sided score is needed
-  before VANISHED is meaningful. Deferred — A4 concerns bursts, not disappearances.
+- **Q2b — RESOLVED (2026-07-28).** Poisson surprise was one-sided (upper tail), so VANISHED
+  templates (`window_count = 0`) always scored 0 and could not rank. Fixed with a two-sided
+  metric: if the window count is below the expected rate λ, score the **lower tail**
+  (`-log P(X ≤ k)` via `poisson.logcdf`); otherwise the upper tail as before. A dropped/vanished
+  template now scores high (e.g. baseline 40 → window 0 scores ~40) and ranks. Bonus: partial
+  drops are now scorable too, though `diff()` currently only surfaces the full-vanish case.
 - **Q3.** Digest size vs summary quality trade-off: how many samples per anomaly (2? 5?).
   Currently capped at 3 in `diff()`.
 - **Q4.** Streamlit demo in v1 or defer to v1.1?

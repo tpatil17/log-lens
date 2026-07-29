@@ -35,14 +35,16 @@ def test_lambda_zero_is_finite():
 
 
 def test_normal_is_quieter_than_anomaly():
-    # Window matching the baseline expectation should score low.
+    # A window matching the baseline expectation should score low...
     assert poisson_surprise(100, 100) < poisson_surprise(0, 25)
-    # Below expectation => essentially no surprise.
-    assert poisson_surprise(100, 50) < 1.0
+    assert poisson_surprise(100, 100) < 2.0
+    # ...but a real DROP is now surprising too (two-sided scoring, Q2b fix):
+    # 100 -> 50 falls in the lower tail and must outscore the quiet case.
+    assert poisson_surprise(100, 50) > poisson_surprise(100, 100)
 
 
-def test_vanished_scores_zero():
-    # KNOWN LIMITATION (design doc Q2b): surprise is one-sided (upper tail),
-    # so a vanished template (window=0) always scores 0. This test documents
-    # that on purpose — if lower-tail scoring is added, update it deliberately.
-    assert poisson_surprise(100, 0) == 0.0
+def test_vanished_is_now_surprising():
+    # Q2b FIXED: two-sided surprise. A template that fired ~100x in the baseline
+    # but vanished (window=0) is highly improbable under the lower tail, so it
+    # scores high and can rank — previously this returned 0 and sank.
+    assert poisson_surprise(100, 0) > 50.0

@@ -1,3 +1,6 @@
+import json
+from dataclasses import asdict
+
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -34,26 +37,83 @@ def main():
 
 
 @app.command()
-def analyze(path: str, top: int = 10, explain: bool = False, model: str = DEFAULT_MODEL):
+def analyze(
+    path: str,
+    top: int = 10,
+    explain: bool = False,
+    model: str = DEFAULT_MODEL,
+    as_json: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
+):
     """Rank what changed between the baseline and recent window of a log file.
 
     Pass --explain to send a compact digest of the top anomalies to OpenAI for a
     plain-English explanation (needs OPENAI_API_KEY; tokens spent only on demand).
+    Pass --json for machine-readable output (stdout is pure JSON; notices go to stderr).
     """
     pairs = list(mine(read(path)))
     baseline, window = split_midpoint(pairs)
     anomalies = diff(baseline, window)
-    _render(anomalies[:top], source=path)
+    top_anoms = anomalies[:top]
 
+    if as_json:
+        out = {
+            "source": path,
+            "anomaly_count": len(anomalies),
+            "anomalies": [asdict(a) for a in top_anoms],
+        }
+        if explain and anomalies:
+            try:
+                digest = build_digest(anomalies, source=path)
+                out["explanation"] = asdict(summarize(digest, model=model))
+            except LLMUnavailable as e:
+                out["explanation"] = None
+                out["llm_error"] = str(e)
+        print(json.dumps(out, indent=2))
+        return
+
+    _render(top_anoms, source=path)
     if explain and anomalies:
-        digest = build_digest(anomalies, source=path)
         try:
-            explanation = summarize(digest, model=model)
+            explanation = summarize(build_digest(anomalies, source=path), model=model)
         except LLMUnavailable as e:
             # F8: degrade gracefully — the report above is unaffected.
             console.print(f"\n[dim]LLM explanation skipped: {e}[/dim]")
         else:
             _render_explanation(explanation)
+
+
+@app.command()
+def watch(
+    path: str,
+    window: int = 200,
+    min_baseline: int = 300,
+    refresh: int = 50,
+    threshold: float = 10.0,
+):
+    """Tail a growing log; alert on anomalies vs the baseline frozen at launch.
+
+    Best started on a currently-healthy log (e.g. right after a deploy). Ctrl-C to stop.
+    """
+    from loglens import watch as watch_mod
+
+    def emit(anomalies):
+        for a in anomalies:
+            sample = a.samples[0] if a.samples else ""
+            style = _KIND_STYLE.get(a.kind, "")
+            console.print(
+                f"[{style}]ALERT {a.kind}[/] score={a.score:.1f} "
+                f"~{a.base_count:.0f}→{a.window_count}  [dim]{sample}[/dim]"
+            )
+
+    console.print(f"[dim]watching {path} — baseline frozen at launch, Ctrl-C to stop[/dim]")
+    try:
+        watch_mod.watch(
+            path, window=window, min_baseline=min_baseline,
+            refresh=refresh, threshold=threshold,
+            emit=emit, warn=lambda m: console.print(f"[yellow]{m}[/yellow]"),
+        )
+    except KeyboardInterrupt:
+        console.print("\n[dim]stopped.[/dim]")
 
 
 @app.command()

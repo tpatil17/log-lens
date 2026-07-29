@@ -1,4 +1,3 @@
-
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
@@ -9,22 +8,24 @@ from loglens.models import LogRecord
 
 INI_PATH = Path(__file__).parent / "drain3.ini"
 
-def mine(records: Iterable[LogRecord]) -> Iterator[tuple[LogRecord, int]]:
 
-    config = TemplateMinerConfig()
-    config.load(str(INI_PATH))       
-    config = TemplateMinerConfig()
+def make_miner() -> TemplateMiner:
+    """Build a TemplateMiner with masking loaded from drain3.ini.
 
-    template_miner = TemplateMiner(config=config)
-    
-    
+    Exposed so callers that stream (e.g. `watch`) can keep ONE miner alive
+    across many batches, so template ids stay stable over time."""
+    config = TemplateMinerConfig()
+    config.load(str(INI_PATH))
+    return TemplateMiner(config=config)
+
+
+def mine(records: Iterable[LogRecord], miner: TemplateMiner | None = None
+         ) -> Iterator[tuple[LogRecord, int]]:
+    """Assign each record a stable template id via Drain3.
+
+    Pass an existing `miner` to share template ids across calls; otherwise a
+    fresh one is created (the batch case)."""
+    miner = miner or make_miner()
     for log_record in records:
-        rs = template_miner.add_log_message(log_record.message)
-        
-        yield ( log_record, rs["cluster_id"] )
-    
-
-
-  
-
-        
+        result = miner.add_log_message(log_record.message)
+        yield (log_record, result["cluster_id"])
