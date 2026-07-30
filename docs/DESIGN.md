@@ -97,9 +97,17 @@ escalating scores). Key design points:
   the window and trip spurious VANISHED alerts; realistic interleaved traffic
   mitigates this. Future: suppress VANISHED when the window is burst-dominated.
 
-**Next course of action (in order):**
-1. Remaining M6: PyPI build-readiness (LICENSE, `python -m build`), Dockerfile, demo GIF.
-2. Done: `--json` (F7); two-sided VANISHED scoring (Q2b); `watch` mode.
+**Product push (repositioning to "log diffing for deploys/incidents"):**
+- **Phase A DONE — `loglens diff before.log after.log`.** The flagship: before = baseline,
+  after = window, mined through one shared miner, baseline rate-normalized to the after
+  size. Ranks NEW/SPIKE/VANISHED across the two files; supports `--explain` and `--json`.
+  Sidesteps the midpoint-split assumption entirely. Glue lives in `pipeline.py`
+  (`analyze_file`, `diff_files`); `analyze` and `diff` share one `_report` output path.
+- Phase B (next): real timestamp/format robustness (nginx, syslog, ISO) so plaintext logs
+  get windows. Phase C: ship (LICENSE, `python -m build`, pipx, Dockerfile). Phase D: README
+  headline + demo GIF. Phase E: time windows (F5), Slack webhook, richer anomaly types.
+
+**Done:** `--json` (F7); two-sided VANISHED scoring (Q2b); `watch` mode; `diff` (Phase A).
 3. Eval rigor: the block threshold is in-sample (F1-optimal operating point); a
    train/test split would report a held-out number.
 

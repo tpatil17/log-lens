@@ -75,12 +75,17 @@ make lint    # ruff
 ## Usage
 
 ```bash
-loglens analyze app.log            # rank what's new/spiking/vanished
-loglens analyze app.log --explain  # + plain-English explanation (OpenAI)
-loglens analyze app.log --json     # machine-readable output (pure JSON on stdout)
+loglens diff before.log after.log  # what changed across a deploy/incident (the flagship)
+loglens diff before.log after.log --explain   # + plain-English explanation (OpenAI)
+loglens analyze app.log            # split one file at its midpoint and rank changes
 loglens inspect app.log            # detect format + preview (before analyzing)
 loglens watch app.log              # tail live; alert on anomalies vs launch baseline
 ```
+
+The headline use case is **diffing a log across a deploy**: point `diff` at a
+pre-deploy capture and a post-deploy capture, and it ranks what's newly appearing,
+spiking, or gone — the errors a deploy introduced, surfaced out of the routine
+noise. `--explain` and `--json` work on `diff` too.
 
 `analyze` and `inspect` auto-detect the log format (JSON, logfmt, plaintext),
 handle gzip and stdin, and fold multiline stack traces.
@@ -168,6 +173,7 @@ src/loglens/
   mining.py      # mine(): records → (record, template_id) via Drain3 + masking
   scoring.py     # poisson_surprise(): the statistical surprise metric
   windowing.py   # diff() / score_counts(): baseline vs window → ranked list[Anomaly]
+  pipeline.py    # analyze_file() / diff_files(): whole-file glue (ingest→mine→score)
   watch.py       # live tailing: freeze baseline at launch, alert on the window
   digest.py      # compress top-k anomalies → compact structured digest
   summarize.py   # digest → OpenAI → English explanation (optional)

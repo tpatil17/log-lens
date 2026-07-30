@@ -16,10 +16,10 @@ except ImportError:
 
 from loglens.detect import detect, score_formats
 from loglens.digest import build_digest
-from loglens.ingest import read, sample_lines
-from loglens.mining import mine
+from loglens.ingest import sample_lines
+from loglens.pipeline import analyze_file, diff_files
 from loglens.summarize import DEFAULT_MODEL, LLMUnavailable, summarize
-from loglens.windowing import Anomaly, diff, split_midpoint
+from loglens.windowing import Anomaly
 
 app = typer.Typer(help="Find what's new, spiking, or vanished in your logs.")
 console = Console()
@@ -50,20 +50,45 @@ def analyze(
     plain-English explanation (needs OPENAI_API_KEY; tokens spent only on demand).
     Pass --json for machine-readable output (stdout is pure JSON; notices go to stderr).
     """
-    pairs = list(mine(read(path)))
-    baseline, window = split_midpoint(pairs)
-    anomalies = diff(baseline, window)
+    _report(analyze_file(path), source=path, top=top, explain=explain, model=model, as_json=as_json)
+
+
+@app.command("diff")
+def diff_cmd(
+    before: str,
+    after: str,
+    top: int = 10,
+    explain: bool = False,
+    model: str = DEFAULT_MODEL,
+    as_json: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
+):
+    """Compare two logs and rank what changed — the deploy/incident diff.
+
+    `before` is the baseline (e.g. pre-deploy), `after` is the window (post-deploy).
+    NEW = appeared after, VANISHED = stopped after, SPIKE = got more frequent.
+    Supports --explain and --json just like analyze.
+    """
+    _report(
+        diff_files(before, after),
+        source=f"{before} → {after}",
+        top=top, explain=explain, model=model, as_json=as_json,
+    )
+
+
+def _report(anomalies, source, top, explain, model, as_json):
+    """Shared output path for analyze/diff: render a table or emit JSON, with an
+    optional LLM explanation. Pure presentation — no detection logic here."""
     top_anoms = anomalies[:top]
 
     if as_json:
         out = {
-            "source": path,
+            "source": source,
             "anomaly_count": len(anomalies),
             "anomalies": [asdict(a) for a in top_anoms],
         }
         if explain and anomalies:
             try:
-                digest = build_digest(anomalies, source=path)
+                digest = build_digest(anomalies, source=source)
                 out["explanation"] = asdict(summarize(digest, model=model))
             except LLMUnavailable as e:
                 out["explanation"] = None
@@ -71,10 +96,10 @@ def analyze(
         print(json.dumps(out, indent=2))
         return
 
-    _render(top_anoms, source=path)
+    _render(top_anoms, source=source)
     if explain and anomalies:
         try:
-            explanation = summarize(build_digest(anomalies, source=path), model=model)
+            explanation = summarize(build_digest(anomalies, source=source), model=model)
         except LLMUnavailable as e:
             # F8: degrade gracefully — the report above is unaffected.
             console.print(f"\n[dim]LLM explanation skipped: {e}[/dim]")
@@ -193,7 +218,7 @@ def _render(anomalies: list[Anomaly], source: str = "") -> None:
             str(rank),
             f"[{_KIND_STYLE.get(a.kind, '')}]{a.kind}[/]",
             f"{a.score:.1f}",
-            f"{a.base_count}→{a.window_count}",
+            f"{a.base_count:.0f}→{a.window_count}",
             sample,
         )
 
