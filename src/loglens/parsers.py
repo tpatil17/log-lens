@@ -168,6 +168,95 @@ class LogfmtParser:
         return _confidence_from_parse(self, sample)
 
 
-# Registry consumed by detect.py. Order matters only as a tie-break:
-# more-structured formats first (JSON > logfmt > plaintext).
-PARSERS: list[Parser] = [JsonParser(), LogfmtParser(), PlaintextParser()]
+# --- plaintext with a leading/embedded timestamp -------------------------
+# Real-world plaintext logs: nginx/Apache access, syslog, ISO-8601 app logs.
+# Each is a thin subclass — a regex that captures the timestamp + the rest, plus
+# how to turn that timestamp string into a datetime.
+
+_LEVEL_RE = re.compile(r"\b(TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL|CRITICAL)\b")
+
+
+def _find_level(text: str) -> str | None:
+    m = _LEVEL_RE.search(text)
+    return m.group(1) if m else None
+
+
+class _TimestampParser:
+    """Base for regex-with-timestamp plaintext formats. PATTERN must have named
+    groups `ts` and `rest`; `_ts` turns the raw timestamp string into a datetime."""
+
+    name = "timestamp"
+    PATTERN: re.Pattern
+
+    def _ts(self, raw: str) -> datetime | None:  # overridden per format
+        raise NotImplementedError
+
+    def parse(self, line: str, lineno: int) -> LogRecord | None:
+        m = self.PATTERN.match(line)
+        if not m:
+            return None  # not my format
+        rest = m.group("rest")
+        return LogRecord(
+            ts=self._ts(m.group("ts")),
+            level=_find_level(rest),
+            message=rest,
+            raw=line,
+            lineno=lineno,
+        )
+
+    def confidence(self, sample: Sequence[str]) -> float:
+        return _confidence_from_parse(self, sample)
+
+
+class IsoParser(_TimestampParser):
+    name = "iso"
+    # 2026-07-28T10:00:00Z ... / 2026-07-28 10:00:00,123 ...
+    PATTERN = re.compile(
+        r"^(?P<ts>\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?"
+        r"(?:Z|[+-]\d{2}:?\d{2})?)\s+(?P<rest>.*)$"
+    )
+
+    def _ts(self, raw: str) -> datetime | None:
+        try:
+            return datetime.fromisoformat(raw.replace(",", ".").replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+
+class SyslogParser(_TimestampParser):
+    name = "syslog"
+    # Oct 10 13:55:36 host process[pid]: message   (RFC3164 — no year)
+    PATTERN = re.compile(
+        r"^(?P<ts>[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+\S+\s+(?P<rest>.*)$"
+    )
+
+    def _ts(self, raw: str) -> datetime | None:
+        try:
+            # RFC3164 omits the year; stamp the current one.
+            return datetime.strptime(raw, "%b %d %H:%M:%S").replace(year=datetime.now().year)
+        except ValueError:
+            return None
+
+
+class AccessLogParser(_TimestampParser):
+    name = "nginx"
+    # 127.0.0.1 - - [10/Oct/2000:13:55:36 -0700] "GET / HTTP/1.0" 200 2326 ...
+    PATTERN = re.compile(r'^\S+ \S+ \S+ \[(?P<ts>[^\]]+)\] (?P<rest>.*)$')
+
+    def _ts(self, raw: str) -> datetime | None:
+        try:
+            return datetime.strptime(raw, "%d/%b/%Y:%H:%M:%S %z")
+        except ValueError:
+            return None
+
+
+# Registry consumed by detect.py. Order is only a tie-break: more-structured
+# formats first (JSON > logfmt), then plaintext families (shapes are distinct).
+PARSERS: list[Parser] = [
+    JsonParser(),
+    LogfmtParser(),
+    AccessLogParser(),
+    SyslogParser(),
+    IsoParser(),
+    PlaintextParser(),
+]

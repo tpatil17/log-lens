@@ -1,31 +1,27 @@
 # LogLens
 
-**Find what's *different* about your logs right now — and, optionally, what it means.**
+**See what changed in your logs across a deploy — locally, in one command, explained by AI.**
 
-LogLens is a lightweight, local-first log anomaly analyzer. It mines raw log lines into
-templates, compares a recent window against a baseline, and ranks what's **new**, **spiking**,
-or **vanished** by statistical surprise — so the signal isn't buried in routine noise. An
-optional LLM stage explains the top anomalies in plain English, seeing only a compact digest,
-never your raw logs.
+LogLens diffs two logs (before and after a deploy or incident) and ranks what's **new**,
+**spiking**, or **vanished** — pulling the errors a change introduced out of the routine noise.
+It mines raw lines into templates and scores each by statistical surprise, so detection is
+deterministic and runs entirely on your machine. An optional stage sends a tiny digest — never
+your raw logs — to OpenAI for a plain-English explanation.
 
-> **Core thesis:** *statistics detect, the LLM explains.* Detection is deterministic,
-> reproducible, and runs entirely on your machine.
+![LogLens diffing a deploy](examples/demo.gif)
 
-## Status
+> **Core thesis:** *statistics detect, the LLM explains.* The statistical layer is cheap,
+> local, and reproducible; the LLM only ever sees a ~2 KB digest of the top anomalies.
 
-Early development — the **detection pipeline works end-to-end and its core hypothesis is
-proven** by an automated test. The CLI and LLM layers are next. See
-[`docs/DESIGN.md`](docs/DESIGN.md) for the full design and current status.
+## Highlights
 
-| Stage | State |
-|---|---|
-| Ingest (HDFS format) | ✅ working |
-| Template mining (Drain3 + masking) | ✅ working |
-| Windowing + NEW/SPIKE/VANISHED diff | ✅ working |
-| Poisson surprise scoring | ✅ working |
-| A4 acceptance test (burst ranks #1) | ✅ passing |
-| `loglens analyze` CLI | 🔜 next |
-| LLM explanation layer | ⏳ planned |
+- **Deploy diff** — `loglens diff before.log after.log` ranks what changed, in seconds.
+- **Auto-format** — JSON, logfmt, nginx/Apache, syslog, ISO-8601 app logs; gzip and stdin too.
+- **Evaluated** — **0.85 F1** (unsupervised) on the HDFS_v1 anomaly-detection benchmark.
+- **Private, optional AI** — raw logs stay local; `--explain` is opt-in and sees only a digest.
+- **Zero infrastructure** — a `pip install`; no collectors, storage, or dashboards.
+
+See [`docs/DESIGN.md`](docs/DESIGN.md) for the full design, decisions, and milestones.
 
 ## How it works
 
@@ -72,6 +68,21 @@ make test    # pytest
 make lint    # ruff
 ```
 
+## Install
+
+```bash
+pipx install loglens          # recommended (once published to PyPI)
+pip install loglens           # or into your environment
+pip install "loglens[llm]"    # add the optional OpenAI --explain support
+```
+
+Or run it without a local Python setup, via Docker:
+
+```bash
+docker build -t loglens .
+docker run --rm -v "$PWD:/logs" loglens diff /logs/before.log /logs/after.log
+```
+
 ## Usage
 
 ```bash
@@ -87,8 +98,9 @@ pre-deploy capture and a post-deploy capture, and it ranks what's newly appearin
 spiking, or gone — the errors a deploy introduced, surfaced out of the routine
 noise. `--explain` and `--json` work on `diff` too.
 
-`analyze` and `inspect` auto-detect the log format (JSON, logfmt, plaintext),
-handle gzip and stdin, and fold multiline stack traces.
+All commands auto-detect the log format — JSON, logfmt, nginx/Apache access,
+syslog, and ISO-8601 timestamped app logs — and handle gzip and stdin and fold
+multiline stack traces. `inspect` reports which format it detected.
 
 `--explain` is opt-in (tokens are spent only when you ask). It sends a compact
 ~1–2 KB digest of the *top anomalies only* — never your raw logs — to OpenAI, and

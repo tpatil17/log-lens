@@ -103,9 +103,18 @@ escalating scores). Key design points:
   size. Ranks NEW/SPIKE/VANISHED across the two files; supports `--explain` and `--json`.
   Sidesteps the midpoint-split assumption entirely. Glue lives in `pipeline.py`
   (`analyze_file`, `diff_files`); `analyze` and `diff` share one `_report` output path.
-- Phase B (next): real timestamp/format robustness (nginx, syslog, ISO) so plaintext logs
-  get windows. Phase C: ship (LICENSE, `python -m build`, pipx, Dockerfile). Phase D: README
-  headline + demo GIF. Phase E: time windows (F5), Slack webhook, richer anomaly types.
+- **Phase B DONE — real-world plaintext formats.** Added `IsoParser`, `SyslogParser`,
+  `AccessLogParser` (nginx/Apache) as Parser classes; detection now names the format
+  ("detected nginx"). Verified: `diff` on real nginx before/after logs surfaces a new
+  500-error endpoint. Adding a format was one class each — the payoff of the uniform
+  Parser interface. No datasets needed; formats are covered by small synthetic fixtures.
+- **Phase C DONE — ship-ready.** `LICENSE` added; `python -m build` produces a clean
+  wheel + sdist with `drain3.ini` packaged; a fresh-venv install of the wheel runs
+  `loglens diff` from the console script (the M6 "fresh machine" bar). `Dockerfile` +
+  `.dockerignore` added (API key passed at run time, never baked in). Remaining: the
+  actual `twine upload` to PyPI (author action, needs account/token).
+- Phase D: README headline + demo GIF. Phase E: time windows (F5), Slack webhook,
+  richer anomaly types.
 
 **Done:** `--json` (F7); two-sided VANISHED scoring (Q2b); `watch` mode; `diff` (Phase A).
 3. Eval rigor: the block threshold is in-sample (F1-optimal operating point); a
