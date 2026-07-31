@@ -16,8 +16,10 @@ venv/
 # Environment / secrets (API keys live here, never in git)
 .env
 
-# Large datasets — only the small samples in tests/data/ are committed
-data/
+# Large datasets — only the small samples in tests/data/ are committed.
+# NOTE: leading slash anchors to repo root, so this ignores ONLY the top-level
+# data/ dir — NOT tests/data/ (a bare `data/` would match both).
+/data/
 *.log.gz
 tests/data/HDFS.log
 tests/data/HDFS_v1/
