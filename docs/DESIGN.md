@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Author** | Tanishq Patil |
-| **Status** | Active — M1–M5 complete (HDFS F1 0.85, LLM layer shipped); M6 packaging next |
+| **Status** | Feature-complete (M1–M6 + product push A–D); shipping + Phase E next |
 | **Created** | 2026-07-15 |
-| **Updated** | 2026-07-28 |
-| **Version** | 0.3 |
+| **Updated** | 2026-08-05 |
+| **Version** | 0.4 |
 
 ---
 
@@ -21,7 +21,7 @@ passing acceptance test.
 | Module | Status | Notes |
 |---|---|---|
 | `models.LogRecord` | ✅ | five-field contract: `ts, level, message, raw, lineno` |
-| `ingest.read_hdfs` | ✅ | streaming generator; 2000/2000 sample lines parse with a timestamp (**A3 met**) |
+| `ingest.read` | ✅ | streaming; auto-detects format; 2000/2000 sample lines parse with a timestamp (**A3 met**). (Started as `read_hdfs`, retired in M3.) |
 | `mining.mine` | ✅ | Drain3 wrapper + `drain3.ini` masking; 17 templates on the 2k sample, within range of the reference CSV (**A2 met**) |
 | `windowing.diff` | ✅ | record-count midpoint split; NEW/SPIKE/VANISHED; carries `samples`; ranks by score |
 | `scoring.poisson_surprise` | ✅ | `-ln P(X ≥ k \| λ = base + α)`, α = 0.5, log-space via `scipy` |
@@ -82,7 +82,7 @@ same principle, right observable per unit.
   `OPENAI_API_KEY` or `openai` package degrades gracefully to the normal report plus
   a one-line notice (F8). Tested with an injected fake client — CI never hits the API.
 
-**M6 in progress — `watch` mode built.** `loglens watch <file>` tails a growing log,
+**M6 — `watch` mode.** `loglens watch <file>` tails a growing log,
 freezes the file's existing content as the baseline at launch, and alerts on
 anomalies in the rolling window (verified live: caught an appended error burst with
 escalating scores). Key design points:
@@ -113,12 +113,33 @@ escalating scores). Key design points:
   `loglens diff` from the console script (the M6 "fresh machine" bar). `Dockerfile` +
   `.dockerignore` added (API key passed at run time, never baked in). Remaining: the
   actual `twine upload` to PyPI (author action, needs account/token).
-- Phase D: README headline + demo GIF. Phase E: time windows (F5), Slack webhook,
-  richer anomaly types.
+- **Phase D DONE — post-ready.** README reframed around deploy-diffing (headline,
+  highlights, install/Docker). Demo assets committed: `examples/{before,after}.log`
+  (app-log deploy scenario), `examples/demo.tape` (VHS → GIF) and `demo.sh`. Recording
+  the GIF and pushing it is the author's action.
 
-**Done:** `--json` (F7); two-sided VANISHED scoring (Q2b); `watch` mode; `diff` (Phase A).
-3. Eval rigor: the block threshold is in-sample (F1-optimal operating point); a
-   train/test split would report a held-out number.
+**Also done along the way:** `--json` (F7); two-sided VANISHED scoring (Q2b); a CI fix
+(the `.gitignore` `data/` rule was ignoring `tests/data/`, so fixtures weren't committed —
+now anchored to `/data/`).
+
+## Next steps (as of 2026-08-05)
+
+**Ship (author actions):**
+1. Push the CI fix, confirm GitHub Actions is green.
+2. Record the demo GIF (`vhs examples/demo.tape`), commit it.
+3. `twine upload dist/*` to PyPI (enables `pipx install loglens`); one local `docker build`.
+4. Post — deploy-diff hook + GIF + 0.85 F1 + the "statistics detect, LLM explains" story.
+
+**Phase E — depth (build after launch, guided by feedback):**
+5. Time-based windows (F5): `--baseline 24h --window 15m` (unblocked by the Phase B parsers).
+6. Slack webhook for `watch` (U2): post alerts to a channel.
+7. Access-log endpoint mode: key on method+path+status instead of masking them, so
+   endpoint-level regressions (a new 500 on /checkout) surface. (Known limitation today.)
+
+**Polish / rigor:**
+8. Suppress spurious VANISHED alerts in `watch` when the window is burst-dominated.
+9. Eval: report a held-out (train/test split) F1 alongside the in-sample number.
+10. Richer anomaly types (latency/value-based) — largest scope, only if traction warrants.
 
 ---
 
@@ -234,14 +255,18 @@ the LLM only ever sees the top-k anomaly digest — it explains, it does not det
 
 Delivery is vertical-slice first: a working ugly pipeline, then hardening.
 
-| Milestone | Scope | Acceptance criteria |
-|---|---|---|
-| **M1 — PoC (Slice 1)** | HDFS-only end-to-end | see §9 |
-| **M2 — Scoring (Slice 2)** | Poisson z-scores, NEW/SPIKE/VANISHED | injected incident ranks #1; unit-tested |
-| **M3 — Robust ingest (Slice 3)** | auto-detection, JSON/logfmt, multiline, stdin/gzip, fallback | `loglens inspect` correct on ≥5 formats |
-| **M4 — Evaluation** | precision/recall vs `anomaly_label.csv` | reproducible `make eval`; README table |
-| **M5 — LLM layer** | digest → Claude summary | end-to-end `analyze`; `--no-llm` identical minus summary |
-| **M6 — Release** | PyPI, Docker, watch mode, README+GIF | fresh machine: `pip install loglens` → useful report on unseen nginx log in <1 min |
+| Milestone | Scope | Acceptance criteria | Status |
+|---|---|---|---|
+| **M1 — PoC (Slice 1)** | HDFS-only end-to-end | see §9 | ✅ |
+| **M2 — Scoring (Slice 2)** | Poisson surprise, NEW/SPIKE/VANISHED | injected incident ranks #1; unit-tested | ✅ |
+| **M3 — Robust ingest (Slice 3)** | auto-detection, JSON/logfmt, multiline, stdin/gzip, fallback | `loglens inspect` correct on ≥5 formats | ✅ |
+| **M4 — Evaluation** | precision/recall vs `anomaly_label.csv` | reproducible `make eval`; README table | ✅ (F1 0.85) |
+| **M5 — LLM layer** | digest → OpenAI summary | opt-in `--explain`; identical minus summary without a key | ✅ |
+| **M6 — Release** | PyPI, Docker, watch mode, README+GIF | fresh machine: `pip install` → useful report in <1 min | ◻ code done; PyPI upload + GIF pending |
+
+**Product push (post-M6):** repositioned to deploy/incident log-diffing.
+`loglens diff` (A ✅), real formats — nginx/syslog/ISO (B ✅), ship-ready packaging (C ✅),
+README + demo assets (D ✅). Phase E (time windows, Slack, access-log mode) is future work.
 
 ## 9. Phase 1 — Proof of Concept (M1)
 

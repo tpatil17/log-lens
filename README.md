@@ -198,12 +198,17 @@ docs/DESIGN.md   # full design document, decisions, milestones, status
 
 ## Roadmap
 
-Done: end-to-end pipeline, Poisson scoring, `analyze`/`inspect` CLI, multi-format
-ingest, unit + acceptance tests with CI, the evaluation harness (HDFS F1 0.85), and
-the optional LLM explanation layer (`--explain`). Next:
+Done: the `diff` / `analyze` / `inspect` / `watch` commands; multi-format ingest
+(JSON, logfmt, nginx, syslog, ISO); two-sided NEW/SPIKE/VANISHED scoring; `--explain`
+and `--json`; the evaluation harness (HDFS F1 0.85); unit + acceptance tests with CI;
+and build-ready packaging (wheel/sdist, Dockerfile).
 
-1. **Lower-tail scoring** so vanished logs can rank (currently one-sided).
-2. **Packaging** — PyPI, Docker, a `watch` mode, demo GIF.
+Next:
+
+1. **Publish** to PyPI (`pipx install loglens`) and record the demo GIF.
+2. **Time windows** — `--baseline 24h --window 15m` for real time-based comparisons.
+3. **Slack webhook** for `watch`, and an **access-log mode** that keys on
+   method + path + status so endpoint-level regressions surface.
 
 ## License
 
