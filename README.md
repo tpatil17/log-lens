@@ -89,6 +89,7 @@ docker run --rm -v "$PWD:/logs" loglens diff /logs/before.log /logs/after.log
 loglens diff before.log after.log  # what changed across a deploy/incident (the flagship)
 loglens diff before.log after.log --explain   # + plain-English explanation (OpenAI)
 loglens analyze app.log            # split one file at its midpoint and rank changes
+loglens analyze app.log --window 15m   # or split by time: last 15m vs the period before
 loglens inspect app.log            # detect format + preview (before analyzing)
 loglens watch app.log              # tail live; alert on anomalies vs launch baseline
 ```
@@ -206,8 +207,7 @@ and build-ready packaging (wheel/sdist, Dockerfile).
 Next:
 
 1. **Publish** to PyPI (`pipx install loglens`) and record the demo GIF.
-2. **Time windows** — `--baseline 24h --window 15m` for real time-based comparisons.
-3. **Slack webhook** for `watch`, and an **access-log mode** that keys on
+2. **Slack webhook** for `watch`, and an **access-log mode** that keys on
    method + path + status so endpoint-level regressions surface.
 
 ## License

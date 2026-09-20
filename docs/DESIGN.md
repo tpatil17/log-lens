@@ -131,7 +131,12 @@ now anchored to `/data/`).
 4. Post — deploy-diff hook + GIF + 0.85 F1 + the "statistics detect, LLM explains" story.
 
 **Phase E — depth (build after launch, guided by feedback):**
-5. Time-based windows (F5): `--baseline 24h --window 15m` (unblocked by the Phase B parsers).
+5. ✅ **Time-based windows (F5) DONE** — `analyze --window 15m [--baseline 2h]` splits a
+   timestamped log by time instead of the record midpoint, using the file's own last
+   timestamp as "now" (deterministic; correct on saved logs, where wall-clock would give an
+   empty window). Baseline defaults to 4× the window and is rate-normalized to it. Falls back
+   to the midpoint split (with a notice) when the log has no timestamps. Duration parsing +
+   time split live in `pipeline.py`; the rate-normalizer is now shared with `diff`.
 6. Slack webhook for `watch` (U2): post alerts to a channel.
 7. Access-log endpoint mode: key on method+path+status instead of masking them, so
    endpoint-level regressions (a new 500 on /checkout) surface. (Known limitation today.)

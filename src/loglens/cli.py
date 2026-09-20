@@ -17,7 +17,7 @@ except ImportError:
 from loglens.detect import detect, score_formats
 from loglens.digest import build_digest
 from loglens.ingest import sample_lines
-from loglens.pipeline import analyze_file, diff_files
+from loglens.pipeline import analyze_file, diff_files, parse_duration
 from loglens.summarize import DEFAULT_MODEL, LLMUnavailable, summarize
 from loglens.windowing import Anomaly
 
@@ -40,17 +40,31 @@ def main():
 def analyze(
     path: str,
     top: int = 10,
+    window: str = typer.Option(
+        None, "--window", "-w", help="Recent window by time, e.g. 15m, 2h, 1d."
+    ),
+    baseline: str = typer.Option(
+        None, "--baseline", "-b", help="Baseline span before the window (default 4× window)."
+    ),
     explain: bool = False,
     model: str = DEFAULT_MODEL,
     as_json: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ):
     """Rank what changed between the baseline and recent window of a log file.
 
-    Pass --explain to send a compact digest of the top anomalies to OpenAI for a
-    plain-English explanation (needs OPENAI_API_KEY; tokens spent only on demand).
-    Pass --json for machine-readable output (stdout is pure JSON; notices go to stderr).
+    By default the file is split at its record-count midpoint. Pass --window (and
+    optionally --baseline) to split by time instead, using the log's own last
+    timestamp as "now" — e.g. --window 15m compares the last 15 minutes against
+    the period before it. Falls back to the midpoint split if the log has no
+    timestamps. --explain and --json work here too.
     """
-    _report(analyze_file(path), source=path, top=top, explain=explain, model=model, as_json=as_json)
+    win_td = parse_duration(window) if window else None
+    base_td = parse_duration(baseline) if baseline else None
+    anomalies = analyze_file(
+        path, window=win_td, baseline=base_td,
+        warn=lambda m: console.print(f"[yellow]{m}[/yellow]"),
+    )
+    _report(anomalies, source=path, top=top, explain=explain, model=model, as_json=as_json)
 
 
 @app.command("diff")
