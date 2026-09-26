@@ -180,18 +180,18 @@ src/loglens/
   models.py      # LogRecord — the universal typed contract between stages
   sources.py     # open_lines(): file / stdin / gzip → lines (streaming)
   multiline.py   # merge(): fold stack traces into one logical record
-  parsers.py     # JSON / logfmt / plaintext parsers (uniform interface)
+  parsers.py     # JSON / logfmt / nginx / syslog / ISO parsers (uniform interface)
   detect.py      # sniff-and-vote format detection
   ingest.py      # read(): auto-detect + parse → Iterator[LogRecord]
   mining.py      # mine(): records → (record, template_id) via Drain3 + masking
-  scoring.py     # poisson_surprise(): the statistical surprise metric
+  scoring.py     # poisson_surprise(): two-sided statistical surprise metric
   windowing.py   # diff() / score_counts(): baseline vs window → ranked list[Anomaly]
-  pipeline.py    # analyze_file() / diff_files(): whole-file glue (ingest→mine→score)
+  pipeline.py    # analyze_file() / diff_files() + time-window split & duration parsing
   watch.py       # live tailing: freeze baseline at launch, alert on the window
   digest.py      # compress top-k anomalies → compact structured digest
   summarize.py   # digest → OpenAI → English explanation (optional)
   eval.py        # precision/recall harness (injection + block-level)
-  cli.py         # loglens analyze / inspect (thin typer/rich adapters)
+  cli.py         # diff / analyze / inspect / watch (thin typer/rich adapters)
   drain3.ini     # Drain3 masking config (block IDs, etc.)
 tests/           # unit + acceptance tests, HDFS_2k sample data
 docs/DESIGN.md   # full design document, decisions, milestones, status
@@ -200,9 +200,10 @@ docs/DESIGN.md   # full design document, decisions, milestones, status
 ## Roadmap
 
 Done: the `diff` / `analyze` / `inspect` / `watch` commands; multi-format ingest
-(JSON, logfmt, nginx, syslog, ISO); two-sided NEW/SPIKE/VANISHED scoring; `--explain`
-and `--json`; the evaluation harness (HDFS F1 0.85); unit + acceptance tests with CI;
-and build-ready packaging (wheel/sdist, Dockerfile).
+(JSON, logfmt, nginx, syslog, ISO); two-sided NEW/SPIKE/VANISHED scoring; time-based
+windows (`analyze --window 15m`); `--explain` and `--json`; the evaluation harness
+(HDFS F1 0.85); unit + acceptance tests with CI; and build-ready packaging
+(wheel/sdist, Dockerfile).
 
 Next:
 
